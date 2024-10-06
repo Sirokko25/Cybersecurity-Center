@@ -13,8 +13,15 @@ type Task struct {
 	Status      string `json:"status"`
 }
 
-func (t *Task) CheckingFields() (int, error) {
+func (t *Task) PostCheckingFields() (int, error) {
 	if t.Title == "" || t.Description == "" || t.CreateDate == "" || t.Status == "" {
+		return http.StatusBadRequest, errors.New("Некорректно указаны данные")
+	}
+	return 0, nil
+}
+
+func (t *Task) PutCheckingFields() (int, error) {
+	if t.Id == 0 || t.Title == "" || t.Description == "" || t.CreateDate == "" || t.Status == "" {
 		return http.StatusBadRequest, errors.New("Некорректно указаны данные")
 	}
 	return 0, nil
