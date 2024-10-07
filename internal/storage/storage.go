@@ -9,10 +9,18 @@ import (
 	_ "github.com/lib/pq"
 
 	"sheduler/models"
+
 )
 
 type DB struct {
 	conn *sql.DB
+}
+
+type StorageInterface interface {
+	AppendTask(models.Task) (int, error)
+	ChangeTask(models.Task) (int, error)
+	FindTask(string) (models.Task, int, error)
+	RemoveTask(string) (int, error)
 }
 
 func ConnectionDB() (DB, error) {
@@ -27,7 +35,7 @@ func ConnectionDB() (DB, error) {
 			task_id SERIAL PRIMARY KEY,
 			title TEXT NOT NULL,
 			description TEXT NOT NULL,
-			createdate TEXT NOT NULL,
+			createdate TIMESTAMP WITH TIME ZONE DEFAULT now(),
 			status TEXT NOT NULL
 			);`)
 	if err != nil {
@@ -42,7 +50,7 @@ func ConnectionDB() (DB, error) {
 	return DB{conn: db}, nil
 }
 
-func (db *DB) AppendTask(task models.Task) (int, error) {
+func (db DB) AppendTask(task models.Task) (int, error) {
 	query := `INSERT INTO testtasks (title, description, createdate, status) VALUES ($1, $2, $3, $4)`
 	_, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status)
 	fmt.Println(err)
@@ -52,7 +60,7 @@ func (db *DB) AppendTask(task models.Task) (int, error) {
 	return http.StatusOK, errors.New("Ошибка добавления записи")
 }
 
-func (db *DB) ChangeTask(task models.Task) (int, error) {
+func (db DB) ChangeTask(task models.Task) (int, error) {
 	query := `UPDATE testtasks SET title = $1, description= $2, createdate = $3, status = $4 WHERE task_id = $5`
 	res, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status, task.Id)
 	if err != nil {
@@ -69,7 +77,7 @@ func (db *DB) ChangeTask(task models.Task) (int, error) {
 	return http.StatusOK, nil
 }
 
-func (db *DB) FindTask(id string) (models.Task, int, error) {
+func (db DB) FindTask(id string) (models.Task, int, error) {
 	var task models.Task
 	query := `SELECT task_id, title, description, createdate, status FROM testtasks WHERE task_id = $1`
 	err := db.conn.QueryRow(query, id).Scan(&task.Id, &task.Title, &task.Description, &task.CreateDate, &task.Status)
@@ -84,7 +92,7 @@ func (db *DB) FindTask(id string) (models.Task, int, error) {
 	return task, http.StatusOK, nil
 }
 
-func (db *DB) RemoveTask(id string) (int, error) {
+func (db DB) RemoveTask(id string) (int, error) {
 	deleteQuery := `DELETE FROM testtasks WHERE task_id = $1`
 	res, err := db.conn.Exec(deleteQuery, id)
 	if err != nil {

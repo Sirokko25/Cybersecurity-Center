@@ -1,10 +1,5 @@
 package models
 
-import (
-	"errors"
-	"net/http"
-)
-
 type Task struct {
 	Id          int64  `json:"id"`
 	Title       string `json:"title"`
@@ -13,16 +8,10 @@ type Task struct {
 	Status      string `json:"status"`
 }
 
-func (t *Task) PostCheckingFields() (int, error) {
-	if t.Title == "" || t.Description == "" || t.CreateDate == "" || t.Status == "" {
-		return http.StatusBadRequest, errors.New("Некорректно указаны данные")
-	}
-	return 0, nil
+func (t *Task) PostCheckingFields() bool {
+	return !(t.Title == "" || t.Description == "" || t.CreateDate != "" || t.Status == "")
 }
 
-func (t *Task) PutCheckingFields() (int, error) {
-	if t.Id == 0 || t.Title == "" || t.Description == "" || t.CreateDate == "" || t.Status == "" {
-		return http.StatusBadRequest, errors.New("Некорректно указаны данные")
-	}
-	return 0, nil
+func (t *Task) PutCheckingFields() bool {
+	return t.PostCheckingFields() && t.Id != 0
 }

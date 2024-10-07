@@ -12,7 +12,7 @@ import (
 )
 
 type Handlers struct {
-	TaskStorage storage.DB
+	TaskStorage storage.StorageInterface
 }
 
 func (h *Handlers) AddTask(c *gin.Context) {
@@ -23,13 +23,13 @@ func (h *Handlers) AddTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	code, err := userTask.PostCheckingFields()
-	if err != nil {
-		log.Error().Err(err).Msg("Недостаточно информации в теле запроса.")
-		c.JSON(code, err)
+	ok := userTask.PostCheckingFields()
+	if !ok {
+		log.Error().Err(err).Msg("Неверно указанны данные в запросе.")
+		c.JSON(http.StatusBadRequest, "Неверно указанны данные в запросе.")
 		return
 	}
-	code, err = h.TaskStorage.AppendTask(userTask)
+	code, err := h.TaskStorage.AppendTask(userTask)
 	if err != nil {
 		log.Error().Err(err).Msg("Ошибка при добавлении задачи в базу данных")
 		c.JSON(code, err)
@@ -44,7 +44,7 @@ func (h *Handlers) GetTask(c *gin.Context) {
 	id := c.Param("id")
 	returnedTask, code, err := h.TaskStorage.FindTask(id)
 	if err != nil {
-		log.Error().Err(err).Msg("Ошибка при поиске задачи в базе данных")
+		log.Error().Err(err).Msg("Ошибка при поиске задачи в базе данных.")
 		c.JSON(code, err)
 		return
 	}
@@ -60,13 +60,13 @@ func (h *Handlers) PutTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	code, err := userTask.PutCheckingFields()
-	if err != nil {
-		log.Error().Err(err).Msg("Недостаточно информации в теле запроса.")
-		c.JSON(code, err)
+	ok := userTask.PutCheckingFields()
+	if !ok {
+		log.Error().Err(err).Msg("Неверно указанны данные в запросе.")
+		c.JSON(http.StatusBadRequest, "Неверно указанны данные в запросе.")
 		return
 	}
-	code, err = h.TaskStorage.ChangeTask(userTask)
+	code, err := h.TaskStorage.ChangeTask(userTask)
 	if err != nil {
 		log.Error().Err(err).Msg("Ошибка при обновлении задачи.")
 		c.JSON(code, err)
