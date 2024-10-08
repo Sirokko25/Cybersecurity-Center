@@ -1,6 +1,9 @@
 package server
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 
@@ -25,7 +28,7 @@ func StartServer() error {
 	router.PUT("/api/tasks", handlers.PutTask)
 	router.DELETE("/api/tasks/:id", handlers.DeleteTask)
 
-	err = router.Run("localhost:7070")
+	err = router.Run(fmt.Sprintf("localhost:%s", os.Getenv("TODO_PORT")))
 	if err != nil {
 		log.Error().Err(err).Msg("Ошибка при запуске сервера.")
 		return err

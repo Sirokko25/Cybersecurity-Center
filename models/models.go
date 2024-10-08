@@ -8,10 +8,10 @@ type Task struct {
 	Status      string `json:"status"`
 }
 
-func (t *Task) PostCheckingFields() bool {
+func (t *Task) Validate() bool {
 	return !(t.Title == "" || t.Description == "" || t.CreateDate != "" || t.Status == "")
 }
 
-func (t *Task) PutCheckingFields() bool {
-	return t.PostCheckingFields() && t.Id != 0
+func (t *Task) FullValidate() bool {
+	return t.Validate() && t.Id != 0
 }

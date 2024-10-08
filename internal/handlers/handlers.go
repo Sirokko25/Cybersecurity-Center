@@ -9,6 +9,7 @@ import (
 
 	"sheduler/internal/storage"
 	"sheduler/models"
+
 )
 
 type Handlers struct {
@@ -23,7 +24,7 @@ func (h *Handlers) AddTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	ok := userTask.PostCheckingFields()
+	ok := userTask.Validate()
 	if !ok {
 		log.Error().Err(err).Msg("Неверно указанны данные в запросе.")
 		c.JSON(http.StatusBadRequest, "Неверно указанны данные в запросе.")
@@ -60,7 +61,7 @@ func (h *Handlers) PutTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-	ok := userTask.PutCheckingFields()
+	ok := userTask.FullValidate()
 	if !ok {
 		log.Error().Err(err).Msg("Неверно указанны данные в запросе.")
 		c.JSON(http.StatusBadRequest, "Неверно указанны данные в запросе.")

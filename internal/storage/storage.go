@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -38,30 +39,7 @@ type StorageInterface interface {
 
 func ConnectionDB() (DB, error) {
 
-	//connStr := fmt.Sprintf("host=%s port=%d user=%s "+
-	//	"password=%s dbname=%s sslmode=disable",
-	//	"localhost", 5432, "postgres", "Sirokko25", "Tasks_db")
-	//db, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return DB{}, err
-	//}
-	//_, err = db.Exec(`CREATE TABLE IF NOT EXISTS testtasks (
-	//		task_id SERIAL PRIMARY KEY,
-	//		title TEXT NOT NULL,
-	//		description TEXT NOT NULL,
-	//		createdate TIMESTAMP WITH TIME ZONE DEFAULT now(),
-	//		status TEXT NOT NULL
-	//		);`)
-	//if err != nil {
-	//	return DB{}, fmt.Errorf("failed to create table in db: %w", err)
-	//}
-	//err = db.Ping()
-	//if err != nil {
-	//	panic(err)
-	//}
-
-	dsn := "postgres://postgres:Sirokko25@localhost:5432/Tasks_db?sslmode=disable"
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(os.Getenv("DSN"))))
 	bunConn := bun.NewDB(sqldb, pgdialect.New())
 	err := bunConn.ResetModel(context.Background(), &storageStruct{})
 	if err != nil {
@@ -74,8 +52,6 @@ func ConnectionDB() (DB, error) {
 func (db DB) AppendTask(task models.Task) (int64, error) {
 	storageObject := &storageStruct{Task_id: task.Id, Title: task.Title, Description: task.Description, Status: task.Status}
 	var id int64
-	//query := `INSERT INTO testtasks (title, description, createdate, status) VALUES ($1, $2, $3, $4)`
-	//_, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status)\
 	_, err := db.conn.NewInsert().Model(storageObject).Returning("task_id").Exec(context.Background(), &id)
 	if err != nil {
 		return 0, errors.New("Ошибка добавления записи")
@@ -86,8 +62,6 @@ func (db DB) AppendTask(task models.Task) (int64, error) {
 func (db DB) ChangeTask(task models.Task) (int64, error) {
 	storageObject := &storageStruct{}
 	var idCounter int64
-	//query := `UPDATE testtasks SET title = $1, description= $2, createdate = $3, status = $4 WHERE task_id = $5`
-	//res, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status, task.Id)
 	res, err := db.conn.NewUpdate().Model(storageObject).Set("title = ?, description= ?, status = ?", task.Title, task.Description, task.Status).Where("task_id = ?", task.Id).Returning("task_id").Exec(context.Background(), &idCounter)
 	if err != nil {
 		return 0, err
@@ -106,8 +80,6 @@ func (db DB) ChangeTask(task models.Task) (int64, error) {
 func (db DB) FindTask(id string) (models.Task, error) {
 	var task models.Task
 	storageObject := &storageStruct{}
-	//query := `SELECT task_id, title, description, createdate, status FROM testtasks WHERE task_id = $1`
-	//err := db.conn.QueryRow(query, id).Scan(&task.Id, &task.Title, &task.Description, &task.CreateDate, &task.Status)
 	err := db.conn.NewSelect().Model(storageObject).Where("task_id = ?", id).Scan(context.Background(), storageObject)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -116,22 +88,20 @@ func (db DB) FindTask(id string) (models.Task, error) {
 			return task, errors.New("Ошибка выполнения запроса")
 		}
 	}
-	parseDate := storageObject.Createdate.Format("2006-01-02T15:04:05")
+	parseDate := storageObject.Createdate.Format(os.Getenv("TIME_FORMAT"))
 	task = models.Task{Id: storageObject.Task_id, Title: storageObject.Title, Description: storageObject.Description, CreateDate: parseDate, Status: storageObject.Status}
 	return task, nil
 }
 
 func (db DB) RemoveTask(id string) (int64, error) {
-	var idCounter []int64
+	var idCounter int64 = 0
 	storageObject := &storageStruct{}
-	//deleteQuery := `DELETE FROM testtasks WHERE task_id = $1`
-	//res, err := db.conn.Exec(deleteQuery, id)
 	_, err := db.conn.NewDelete().Model(storageObject).Where("task_id = ?", id).Returning("task_id").Exec(context.Background(), &idCounter)
 	if err != nil {
 		return 0, errors.New("Ошибка выполнения запроса")
 	}
-	if len(idCounter) == 0 {
+	if idCounter == 0 {
 		return 0, nil
 	}
-	return idCounter[0], nil
+	return idCounter, nil
 }
