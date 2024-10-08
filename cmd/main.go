@@ -1,34 +1,21 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"github.com/rs/zerolog/log"
 
-	"sheduler/internal/handlers"
-	"sheduler/internal/storage"
-
+	"sheduler/internal/server"
 )
 
+func Init() {
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
+}
 func main() {
-	//открываем файл для логирования
-
-	//создаём connection к БД
-	db, err := storage.ConnectionDB()
+	Init()
+	err := server.StartServer()
 	if err != nil {
-		//log
+		log.Error().Err(err).Msg("")
 	}
-
-	handlers := handlers.Handlers{db}
-
-	router := gin.Default()
-	router.POST("/api/task/add", handlers.AddTask)
-	router.GET("/api/tasks/:id", handlers.GetTask)
-	router.PUT("/api/tasks", handlers.PutTask)
-	router.DELETE("/api/tasks", handlers.DeleteTask)
-
-	err = router.Run("localhost:7070")
-	if err != nil {
-		//log
-		return
-	}
-
 }

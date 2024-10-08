@@ -1,98 +1,107 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
+	"os"
+	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 
 	"sheduler/models"
 )
 
 type DB struct {
-	conn *sql.DB
+	conn *bun.DB
+}
+
+type storageStruct struct {
+	bun.BaseModel `bun:"table:testtasks,alias:u"`
+
+	Task_id     int64     `bun:",pk,autoincrement"`
+	Title       string    `bun:",notnull"`
+	Description string    `bun:",notnull"`
+	Createdate  time.Time `bun:",nullzero,default:now()"`
+	Status      string    `bun:",notnull"`
+}
+
+type StorageInterface interface {
+	AppendTask(models.Task) (int64, error)
+	ChangeTask(models.Task) (int64, error)
+	FindTask(string) (models.Task, error)
+	RemoveTask(string) (int64, error)
 }
 
 func ConnectionDB() (DB, error) {
-	connStr := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		"localhost", 5432, "postgres", "Sirokko25", "Tasks_db")
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return DB{conn: nil}, err
-	}
-	err = db.Ping()
-	if err != nil {
-		panic(err)
-	}
 
-	fmt.Println("Successfully connected!")
-	return DB{conn: db}, nil
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(os.Getenv("DSN"))))
+	bunConn := bun.NewDB(sqldb, pgdialect.New())
+	err := bunConn.ResetModel(context.Background(), &storageStruct{})
+	if err != nil {
+		return DB{}, errors.New("Ошибка при создании таблицы в базе данных.")
+	}
+	fmt.Println("Соединение создано.")
+	return DB{conn: bunConn}, nil
 }
 
-func (db *DB) AppendTask(task models.Task) (int, error) {
-	query := `INSERT INTO taskstorage (title, description, createdate, status) VALUES (?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status)
+func (db DB) AppendTask(task models.Task) (int64, error) {
+	storageObject := &storageStruct{Task_id: task.Id, Title: task.Title, Description: task.Description, Status: task.Status}
+	var id int64
+	_, err := db.conn.NewInsert().Model(storageObject).Returning("task_id").Exec(context.Background(), &id)
 	if err != nil {
-		return http.StatusInternalServerError, errors.New("Ошибка добавления записи")
+		return 0, errors.New("Ошибка добавления записи")
 	}
-	return http.StatusOK, errors.New("Ошибка добавления записи")
+	return id, nil
 }
 
-func (db *DB) ChangeTask(task models.Task) (int, error) {
-	query := `UPDATE tasks SET title = ?, description= ?, createdate = ?, status = ? WHERE id = ?`
-	res, err := db.conn.Exec(query, task.Title, task.Description, task.CreateDate, task.Status, task.Id)
+func (db DB) ChangeTask(task models.Task) (int64, error) {
+	storageObject := &storageStruct{}
+	var idCounter int64
+	res, err := db.conn.NewUpdate().Model(storageObject).Set("title = ?, description= ?, status = ?", task.Title, task.Description, task.Status).Where("task_id = ?", task.Id).Returning("task_id").Exec(context.Background(), &idCounter)
 	if err != nil {
-		//log
-		return http.StatusInternalServerError, err
+		return 0, err
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		//log
-		return http.StatusInternalServerError, err
+		return 0, err
+	}
+	if rowsAffected == 0 {
+		return 0, errors.New("Задача не найдена.")
 	}
 
-	if rowsAffected == 0 {
-		//log
-		return http.StatusBadRequest, errors.New("Задача не найдена")
-	}
-	return http.StatusOK, nil
+	return idCounter, nil
 }
 
-func (db *DB) FindTask(id string) (models.Task, int, error) {
+func (db DB) FindTask(id string) (models.Task, error) {
 	var task models.Task
-	taskId, _ := strconv.Atoi("id")
-	query := `SELECT id, title, description, createdate, status FROM tasks WHERE id = ?`
-	err := db.conn.QueryRow(query, taskId).Scan(&task.Id, &task.Title, &task.Description, &task.CreateDate, &task.Status)
+	storageObject := &storageStruct{}
+	err := db.conn.NewSelect().Model(storageObject).Where("task_id = ?", id).Scan(context.Background(), storageObject)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return task, http.StatusBadRequest, errors.New("Задача не найдена")
+			return task, errors.New("Задача не найдена")
 		} else {
-			return task, http.StatusBadRequest, errors.New("Ошибка выполнения запроса")
+			return task, errors.New("Ошибка выполнения запроса")
 		}
-
 	}
-	return task, http.StatusOK, nil
+	parseDate := storageObject.Createdate.Format(os.Getenv("TIME_FORMAT"))
+	task = models.Task{Id: storageObject.Task_id, Title: storageObject.Title, Description: storageObject.Description, CreateDate: parseDate, Status: storageObject.Status}
+	return task, nil
 }
 
-func (db *DB) DeleteTask(id string) (int, error) {
-	deleteQuery := `DELETE FROM tasks WHERE id = ?`
-	res, err := db.conn.Exec(deleteQuery, id)
+func (db DB) RemoveTask(id string) (int64, error) {
+	var idCounter int64 = 0
+	storageObject := &storageStruct{}
+	_, err := db.conn.NewDelete().Model(storageObject).Where("task_id = ?", id).Returning("task_id").Exec(context.Background(), &idCounter)
 	if err != nil {
-		//log
-		return http.StatusInternalServerError, errors.New("Ошибка выполнения запроса")
+		return 0, errors.New("Ошибка выполнения запроса")
 	}
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		//log
-		return http.StatusInternalServerError, err
+	if idCounter == 0 {
+		return 0, nil
 	}
-	if rowsAffected == 0 {
-		//log
-		return http.StatusBadRequest, errors.New("Задача не найдена")
-	}
-	return http.StatusOK, nil
+	return idCounter, nil
 }
